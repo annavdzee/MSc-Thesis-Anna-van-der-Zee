@@ -11,6 +11,8 @@ import json
 import yaml
 import time
 import numpy as np
+from tqdm import trange
+
 
 import torch
 import torch.nn as nn
@@ -124,7 +126,7 @@ class TabModel(ABC):
                 'tot_time': 0, 'avg_step_time': 0, 'avg_epoch_time': 0
             }, 
             # 'test': {'loss': [], 'metric': [], 'final_metric': None},
-            'device': torch.cuda.get_device_name(),
+            'device': torch.device('cuda'),
         } # save metrics
         self.no_improvement = 0 # for dnn early stop
     
@@ -234,17 +236,26 @@ class TabModel(ABC):
             else training_args['batch_size'] // training_args['ghost_batch_size'] # for ghost batch size
         steps_per_epoch = len(train_loader)
         tot_step, tot_time = 0, 0
-        for e in range(training_args['max_epochs']):
+        for e in trange(training_args['max_epochs'], desc="Epochs"):
             self.model.train()
             if self.sparser is not None:
                 self.sparser.train()
             tot_loss = 0
             for step, batch in enumerate(train_loader):
                 optimizer.zero_grad()
+
                 if self.sparser is not None:
                     l0_optimizer.zero_grad()
                     lagrangian_optimizer.zero_grad()
                 x_num, x_cat, y = TabModel.parse_batch(batch, placeholders, self.device)
+                # if step == 0:
+                #     print("DEBUG parsed x_num type:", type(x_num))
+                #     print("DEBUG parsed x_num:", x_num if not isinstance(x_num, torch.Tensor) 
+                #         else f"Tensor{tuple(x_num.shape)}")
+                #     print("DEBUG parsed x_cat type:", type(x_cat))
+                #     print("DEBUG parsed x_cat:", x_cat if not isinstance(x_cat, torch.Tensor) 
+                #         else f"Tensor{tuple(x_cat.shape)}")
+
                 if self.sparser is None:
                     logits, forward_time = dnn_fit_func(self.model, x_num, x_cat, y)
                     loss = TabModel.compute_loss(logits, y, task)
@@ -535,27 +546,37 @@ class TabModel(ABC):
     
     @staticmethod
     def parse_batch(batch: Tuple[torch.Tensor], placeholders, device: torch.device):
-        if batch[0].device.type != device.type:
-        # if batch[0].device != device: # initialize self.device with model.device rather than torch.device()
-            # batch = (x.to(device) for x in batch) # generator
-            batch = tuple([x.to(device) for x in batch]) # list
-        # if missing_idx == -1:
-        #     return batch
-        # else:
-        #     return batch[:missing_idx] + [None,] + batch[missing_idx:]
-        ids, X_num, X_cat, ys = None, None, None, None
-        for i, ph in enumerate(placeholders):
-            if ph == 'id':
-                ids = batch[i]
-            elif ph == 'X_num':
-                X_num = batch[i]
-            elif ph == 'X_cat':
-                X_cat = batch[i]
-            else:
-                ys = batch[i]
-        if ids is None:
-            return X_num, X_cat, ys
-        return (ids, X_num), X_cat, ys
+        batch = tuple(x.to(device) for x in batch)
+
+       # extract only the numeric features, categorical features, and target
+        X_num = batch[placeholders.index('X_num')]
+        X_cat = batch[placeholders.index('X_cat')]
+        ys    = batch[placeholders.index('y')]
+ 
+        return X_num, X_cat, ys
+
+    # def parse_batch(batch: Tuple[torch.Tensor], placeholders, device: torch.device):
+    #     if batch[0].device.type != device.type:
+    #     # if batch[0].device != device: # initialize self.device with model.device rather than torch.device()
+    #         # batch = (x.to(device) for x in batch) # generator
+    #         batch = tuple([x.to(device) for x in batch]) # list
+    #     # if missing_idx == -1:
+    #     #     return batch
+    #     # else:
+    #     #     return batch[:missing_idx] + [None,] + batch[missing_idx:]
+    #     ids, X_num, X_cat, ys = None, None, None, None
+    #     for i, ph in enumerate(placeholders):
+    #         if ph == 'id':
+    #             ids = batch[i]
+    #         elif ph == 'X_num':
+    #             X_num = batch[i]
+    #         elif ph == 'X_cat':
+    #             X_cat = batch[i]
+    #         else:
+    #             ys = batch[i]
+    #     if ids is None:
+    #         return X_num, X_cat, ys
+    #     return (ids, X_num), X_cat, ys
     
     @staticmethod
     def compute_loss(logits: torch.Tensor, targets: torch.Tensor, task: str, reduction: str = 'mean'):
