@@ -443,8 +443,16 @@ class TabModel(ABC):
 
     def save_history(self, output_dir):
         # save metrics
+        # with open(Path(output_dir) / 'results.json', 'w') as f:
+        #     json.dump(self.history, f, indent=4)
+    # save metrics, converting non-serializable objects
+        hist = self.history.copy()
+        # Convert the device object to a string
+        if 'device' in hist:
+            hist['device'] = str(hist['device'])
         with open(Path(output_dir) / 'results.json', 'w') as f:
-            json.dump(self.history, f, indent=4)
+            json.dump(hist, f, indent=4)
+
     
     def save_prediction(self, output_dir, results, file='prediction'):
         check_dir(output_dir)

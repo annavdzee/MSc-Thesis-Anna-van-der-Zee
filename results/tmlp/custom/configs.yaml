@@ -1,0 +1,22 @@
+meta:
+  save_path: results/tmlp/custom
+  use_auc: true
+  use_r2: false
+model:
+  d_ffn_factor: 0.66
+  d_token: 256
+  ffn_dropout: null
+  n_layers: 3
+  residual_dropout: 0.1
+  token_bias: true
+training:
+  batch_size: 256
+  ghost_batch_size: null
+  lr: 0.0001
+  max_epochs: 50
+  no_wd_group: null
+  optimizer: adamw
+  patience: 10
+  save_frequency: epoch
+  scheduler: null
+  weight_decay: 0.0
